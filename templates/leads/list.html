@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Leads Management — Mini CRM{% endblock %}
+{% block page_title %}Leads Management{% endblock %}
+
+{% block top_actions %}
+<a href="{% url 'lead_create' %}" class="btn btn-primary">+ Create Lead</a>
+{% endblock %}
+
+{% block content %}
+<div class="table-card">
+  <div class="table-header-bar">
+    <div class="filters-group">
+      <input type="text" id="filter-search" class="form-control" placeholder="Search name, phone, email..." style="width: 250px;">
+      
+      <select id="filter-status" class="form-control">
+        <option value="">All Statuses</option>
+        {% for val, label in statuses %}
+        <option value="{{ val }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+
+      <input type="text" id="filter-source" class="form-control" placeholder="Source (e.g. telegram)" style="width: 180px;">
+
+      <button id="btn-apply-filter" class="btn btn-secondary btn-sm">Filter</button>
+      <button id="btn-reset-filter" class="btn btn-secondary btn-sm" style="color: var(--text-muted);">Reset</button>
+    </div>
+
+    <div>
+      <select id="filter-ordering" class="form-control" style="font-size: 0.85rem;">
+        <option value="-created_at">Newest First</option>
+        <option value="created_at">Oldest First</option>
+        <option value="name">Name (A-Z)</option>
+        <option value="-name">Name (Z-A)</option>
+      </select>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Phone</th>
+        <th>Email</th>
+        <th>Source</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th style="text-align: right;">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="leads-tbody">
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">Loading leads from API...</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="pagination-bar">
+    <span id="page-info">Showing 0 of 0</span>
+    <div style="display: flex; gap: 0.5rem;">
+      <button id="btn-prev" class="btn btn-secondary btn-sm" disabled>Previous</button>
+      <button id="btn-next" class="btn btn-secondary btn-sm" disabled>Next</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let currentPage = 1;
+  let totalPages = 1;
+
+  async function loadLeads(page = 1) {
+    const search = document.getElementById('filter-search').value.trim();
+    const status = document.getElementById('filter-status').value;
+    const source = document.getElementById('filter-source').value.trim();
+    const ordering = document.getElementById('filter-ordering').value;
+
+    const params = new URLSearchParams();
+    params.set('page', page);
+    params.set('page_size', 10);
+    if (search) params.set('search', search);
+    if (status) params.set('status', status);
+    if (source) params.set('source', source);
+    if (ordering) params.set('ordering', ordering);
+
+    const tbody = document.getElementById('leads-tbody');
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Loading...</td></tr>';
+
+    try {
+      const res = await window.apiFetch(`/api/v1/leads/?${params.toString()}`);
+      if (!res.ok) throw new Error('API Error');
+      const data = await res.json();
+
+      currentPage = data.current_page || 1;
+      totalPages = data.total_pages || 1;
+
+      document.getElementById('page-info').innerText = `Page ${currentPage} of ${totalPages} (Total: ${data.count})`;
+      document.getElementById('btn-prev').disabled = !data.previous;
+      document.getElementById('btn-next').disabled = !data.next;
+
+      if (!data.results || data.results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No matching leads found.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.results.map(lead => `
+        <tr>
+          <td><strong>${escapeHtml(lead.name)}</strong></td>
+          <td>${escapeHtml(lead.phone || '—')}</td>
+          <td>${escapeHtml(lead.email || '—')}</td>
+          <td><span style="background: #f1f5f9; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">${escapeHtml(lead.source)}</span></td>
+          <td><span class="badge badge-${lead.status}">${escapeHtml(lead.status_display)}</span></td>
+          <td>${formatDate(lead.created_at)}</td>
+          <td style="text-align: right;">
+            <a href="/leads/${lead.id}/" class="btn btn-secondary btn-sm">View</a>
+            <a href="/leads/${lead.id}/edit/" class="btn btn-secondary btn-sm">Edit</a>
+            <button onclick="deleteLead(${lead.id}, '${escapeHtml(lead.name)}')" class="btn btn-danger btn-sm">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--danger); padding: 2rem;">Failed to load leads from backend API.</td></tr>';
+    }
+  }
+
+  async function deleteLead(id, name) {
+    if (!confirm(`Are you sure you want to delete lead "${name}"?`)) return;
+    try {
+      const res = await window.apiFetch(`/api/v1/leads/${id}/`, { method: 'DELETE' });
+      if (res.status === 204) {
+        loadLeads(currentPage);
+      } else {
+        alert('Failed to delete lead.');
+      }
+    } catch (e) {
+      alert('Error connecting to server.');
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function formatDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  }
+
+  document.getElementById('btn-apply-filter').addEventListener('click', () => loadLeads(1));
+  document.getElementById('filter-search').addEventListener('keyup', (e) => { if (e.key === 'Enter') loadLeads(1); });
+  document.getElementById('filter-ordering').addEventListener('change', () => loadLeads(1));
+  document.getElementById('btn-reset-filter').addEventListener('click', () => {
+    document.getElementById('filter-search').value = '';
+    document.getElementById('filter-status').value = '';
+    document.getElementById('filter-source').value = '';
+    loadLeads(1);
+  });
+
+  document.getElementById('btn-prev').addEventListener('click', () => {
+    if (currentPage > 1) loadLeads(currentPage - 1);
+  });
+  document.getElementById('btn-next').addEventListener('click', () => {
+    if (currentPage < totalPages) loadLeads(currentPage + 1);
+  });
+
+  document.addEventListener('DOMContentLoaded', () => loadLeads(1));
+</script>
+{% endblock %}
