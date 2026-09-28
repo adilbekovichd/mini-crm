@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Lead: {{ lead.name }} — Mini CRM{% endblock %}
+{% block page_title %}{{ lead.name }}{% endblock %}
+
+{% block top_actions %}
+<div style="display: flex; gap: 0.5rem;">
+  <a href="{% url 'lead_edit' lead.id %}" class="btn btn-secondary">Edit Details</a>
+  <button id="btn-delete" class="btn btn-danger">Delete Lead</button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="detail-grid">
+  <!-- Left Column: Details -->
+  <div>
+    <div class="table-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1.25rem;">
+        <div>
+          <span style="font-size: 0.85rem; color: var(--text-muted);">Current Status:</span>
+          <div style="margin-top: 0.25rem;">
+            <span class="badge badge-{{ lead.status }}" id="status-badge" style="font-size: 0.9rem; padding: 0.35rem 0.85rem;">
+              {{ lead.get_status_display }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Realtime status update dropdown using API PATCH -->
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <label for="change-status-select" style="font-size: 0.85rem; font-weight: 600;">Change Status:</label>
+          <select id="change-status-select" class="form-control" style="width: auto;">
+            {% for val, label in statuses %}
+            <option value="{{ val }}" {% if lead.status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+        <div>
+          <span style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Phone</span>
+          <p style="font-size: 1rem; font-weight: 500; margin-top: 0.25rem;">{{ lead.phone|default:"Not provided" }}</p>
+        </div>
+        <div>
+          <span style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Email</span>
+          <p style="font-size: 1rem; font-weight: 500; margin-top: 0.25rem;">{{ lead.email|default:"Not provided" }}</p>
+        </div>
+        <div>
+          <span style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Acquisition Source</span>
+          <p style="font-size: 1rem; font-weight: 500; margin-top: 0.25rem;">{{ lead.source }}</p>
+        </div>
+        <div>
+          <span style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Assigned To</span>
+          <p style="font-size: 1rem; font-weight: 500; margin-top: 0.25rem;">{{ lead.assigned_to.username|default:"Unassigned" }}</p>
+        </div>
+        <div>
+          <span style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Created At</span>
+          <p style="font-size: 0.9rem; margin-top: 0.25rem;">{{ lead.created_at|date:"M d, Y H:i:s" }}</p>
+        </div>
+        <div>
+          <span style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Last Updated</span>
+          <p style="font-size: 0.9rem; margin-top: 0.25rem;">{{ lead.updated_at|date:"M d, Y H:i:s" }}</p>
+        </div>
+      </div>
+
+      <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);">
+        <span style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Notes & Context</span>
+        <div style="margin-top: 0.5rem; background: #f8fafc; padding: 1rem; border-radius: 6px; border: 1px solid var(--border); white-space: pre-wrap; font-size: 0.95rem;">
+          {{ lead.note|default:"No notes added yet." }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Activity History (Bonus 1) -->
+  <div>
+    <div class="table-card" style="padding: 1.5rem;">
+      <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">Activity History</h3>
+      <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">Track all status changes and lead events</p>
+      
+      <div id="activity-container">
+        <ul class="timeline" id="activity-list">
+          <li>Loading activity history from API...</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const leadId = {{ lead.id }};
+
+  async function loadActivities() {
+    try {
+      const res = await window.apiFetch(`/api/v1/leads/${leadId}/activities/`);
+      if (res.ok) {
+        const activities = await res.json();
+        const list = document.getElementById('activity-list');
+        if (!activities || activities.length === 0) {
+          list.innerHTML = '<li style="color: var(--text-muted); font-size: 0.85rem;">No activity recorded yet.</li>';
+          return;
+        }
+        list.innerHTML = activities.map(act => `
+          <li class="timeline-item">
+            <span class="timeline-dot"></span>
+            <div class="timeline-content">
+              <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">
+                <span>${escapeHtml(act.action)}</span>
+                <span class="timeline-time">${new Date(act.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+              </div>
+              <div style="font-size: 0.85rem; color: var(--text-main);">
+                ${escapeHtml(act.note || (act.old_status + ' → ' + act.new_status))}
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+                By: ${escapeHtml(act.user_display)} • ${new Date(act.created_at).toLocaleDateString()}
+              </div>
+            </div>
+          </li>
+        `).join('');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  // Handle status update via PATCH API
+  document.getElementById('change-status-select').addEventListener('change', async (e) => {
+    const newStatus = e.target.value;
+    try {
+      const res = await window.apiFetch(`/api/v1/leads/${leadId}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        const badge = document.getElementById('status-badge');
+        badge.className = `badge badge-${updated.status}`;
+        badge.innerText = updated.status_display;
+        loadActivities();
+      } else {
+        alert('Failed to update status on server.');
+      }
+    } catch (err) {
+      alert('Error updating status.');
+    }
+  });
+
+  // Handle delete
+  document.getElementById('btn-delete').addEventListener('click', async () => {
+    if (!confirm('Are you sure you want to delete this lead?')) return;
+    try {
+      const res = await window.apiFetch(`/api/v1/leads/${leadId}/`, { method: 'DELETE' });
+      if (res.status === 204) {
+        window.location.href = '/leads/';
+      } else {
+        alert('Failed to delete lead.');
+      }
+    } catch (err) {
+      alert('Network error.');
+    }
+  });
+
+  function escapeHtml(str) {
+    return String(str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  document.addEventListener('DOMContentLoaded', loadActivities);
+</script>
+{% endblock %}
