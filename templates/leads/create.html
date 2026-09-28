@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Add New Lead — Mini CRM{% endblock %}
+{% block page_title %}Create New Lead{% endblock %}
+
+{% block content %}
+<div class="form-card">
+  <div id="error-box" style="display:none; background: var(--danger-bg); color: var(--danger); padding: 0.85rem; border-radius: 6px; margin-bottom: 1.25rem;"></div>
+
+  <form id="lead-create-form">
+    <div class="form-group">
+      <label class="form-label" for="name">Lead Name *</label>
+      <input type="text" id="name" name="name" class="form-control" placeholder="e.g. Acme Corp or John Doe" required>
+      <span class="form-hint">Full name or company name</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+      <div class="form-group">
+        <label class="form-label" for="phone">Phone Number</label>
+        <input type="text" id="phone" name="phone" class="form-control" placeholder="+998901234567">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="email">Email Address</label>
+        <input type="email" id="email" name="email" class="form-control" placeholder="contact@example.com">
+      </div>
+    </div>
+    <span class="form-hint" style="display: block; margin-top: -0.5rem; margin-bottom: 1rem;">At least one contact method (phone or email) is recommended.</span>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+      <div class="form-group">
+        <label class="form-label" for="source">Acquisition Source *</label>
+        <input type="text" id="source" name="source" class="form-control" placeholder="e.g. telegram, website, referral" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="status">Initial Status *</label>
+        <select id="status" name="status" class="form-control">
+          {% for val, label in statuses %}
+          <option value="{{ val }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="note">Notes & Requirements</label>
+      <textarea id="note" name="note" class="form-control" rows="4" placeholder="Enter any initial discussion notes, requirements or customer context..."></textarea>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" id="submit-btn" class="btn btn-primary">Create Lead via API</button>
+      <a href="{% url 'leads_list' %}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.getElementById('lead-create-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorBox = document.getElementById('error-box');
+    const submitBtn = document.getElementById('submit-btn');
+    errorBox.style.display = 'none';
+    errorBox.innerHTML = '';
+
+    const payload = {
+      name: document.getElementById('name').value.trim(),
+      phone: document.getElementById('phone').value.trim(),
+      email: document.getElementById('email').value.trim(),
+      source: document.getElementById('source').value.trim(),
+      status: document.getElementById('status').value,
+      note: document.getElementById('note').value.trim(),
+    };
+
+    submitBtn.disabled = true;
+    submitBtn.innerText = 'Submitting to API...';
+
+    try {
+      const res = await window.apiFetch('/api/v1/leads/', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        window.location.href = `/leads/${data.id}/`;
+      } else {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Create Lead via API';
+        errorBox.style.display = 'block';
+        let msgs = [];
+        for (let key in data) {
+          msgs.push(`<strong>${key}:</strong> ${Array.isArray(data[key]) ? data[key].join(', ') : data[key]}`);
+        }
+        errorBox.innerHTML = msgs.join('<br>');
+      }
+    } catch (err) {
+      submitBtn.disabled = false;
+      submitBtn.innerText = 'Create Lead via API';
+      errorBox.style.display = 'block';
+      errorBox.innerText = 'Network error or server unavailable.';
+    }
+  });
+</script>
+{% endblock %}
