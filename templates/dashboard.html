@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Mini CRM{% endblock %}
+{% block page_title %}Dashboard Overview{% endblock %}
+
+{% block top_actions %}
+<a href="{% url 'lead_create' %}" class="btn btn-primary">+ Add New Lead</a>
+{% endblock %}
+
+{% block content %}
+<!-- Live Stats fetched via /api/v1/dashboard/stats/ -->
+<div class="stats-grid" id="stats-container">
+  <div class="stat-card">
+    <span class="stat-label">Total Leads</span>
+    <span class="stat-value" id="stat-total">...</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">New</span>
+    <span class="stat-value" id="stat-new" style="color: var(--info);">...</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Contacted</span>
+    <span class="stat-value" id="stat-contacted" style="color: #b45309;">...</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Qualified</span>
+    <span class="stat-value" id="stat-qualified" style="color: var(--primary);">...</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Won</span>
+    <span class="stat-value" id="stat-won" style="color: var(--success);">...</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Lost</span>
+    <span class="stat-value" id="stat-lost" style="color: var(--danger);">...</span>
+  </div>
+</div>
+
+<div class="table-card">
+  <div class="table-header-bar">
+    <h3 style="font-size: 1.1rem; font-weight: 600;">Recent Leads</h3>
+    <a href="{% url 'leads_list' %}" class="btn btn-secondary btn-sm">View All Leads →</a>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Contact</th>
+        <th>Source</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for lead in recent_leads %}
+      <tr>
+        <td><strong>{{ lead.name }}</strong></td>
+        <td>{{ lead.email|default:lead.phone }}</td>
+        <td>{{ lead.source }}</td>
+        <td><span class="badge badge-{{ lead.status }}">{{ lead.get_status_display }}</span></td>
+        <td>{{ lead.created_at|date:"M d, Y H:i" }}</td>
+        <td><a href="{% url 'lead_detail' lead.id %}" class="btn btn-secondary btn-sm">View</a></td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+          No leads registered yet. <a href="{% url 'lead_create' %}">Create your first lead</a>.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      const res = await window.apiFetch('/api/v1/dashboard/stats/');
+      if (res.ok) {
+        const stats = await res.json();
+        document.getElementById('stat-total').innerText = stats.total;
+        document.getElementById('stat-new').innerText = stats.new;
+        document.getElementById('stat-contacted').innerText = stats.contacted;
+        document.getElementById('stat-qualified').innerText = stats.qualified;
+        document.getElementById('stat-won').innerText = stats.won;
+        document.getElementById('stat-lost').innerText = stats.lost;
+      }
+    } catch (err) {
+      console.error('Failed to load stats:', err);
+    }
+  });
+</script>
+{% endblock %}
