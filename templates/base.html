@@ -1,0 +1,90 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Mini CRM{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  {% if user.is_authenticated %}
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Mini CRM</span>
+      </div>
+      <ul class="sidebar-nav">
+        <li><a href="{% url 'dashboard' %}" class="sidebar-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">📊 Dashboard</a></li>
+        <li><a href="{% url 'leads_list' %}" class="sidebar-link {% if 'lead' in request.resolver_match.url_name %}active{% endif %}">👥 Leads</a></li>
+        <li><a href="/api/docs/" target="_blank" class="sidebar-link">📚 API Docs (Swagger)</a></li>
+        <li><a href="/admin/" target="_blank" class="sidebar-link">⚙️ Django Admin</a></li>
+      </ul>
+      <div class="sidebar-user">
+        <div>Logged in as: <strong>{{ user.username }}</strong></div>
+        <a href="{% url 'logout' %}" class="logout-btn">Log out</a>
+      </div>
+    </aside>
+
+    <div class="main-wrapper">
+      <header class="top-bar">
+        <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+        <div class="top-bar-actions">
+          {% block top_actions %}{% endblock %}
+        </div>
+      </header>
+
+      <main class="content-container">
+        {% if messages %}
+        <div style="margin-bottom: 1.5rem;">
+          {% for message in messages %}
+          <div style="padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 0.5rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">
+            {{ message }}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+  {% else %}
+    {% block auth_content %}{% endblock %}
+  {% endif %}
+
+  <script>
+    // Global helper for authenticated API Fetch calls
+    window.API_TOKEN = "{{ api_token|default:'' }}";
+    
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+
+    window.apiFetch = async function(url, options = {}) {
+      options.headers = options.headers || {};
+      options.headers['Content-Type'] = 'application/json';
+      options.headers['X-CSRFToken'] = getCookie('csrftoken');
+      if (window.API_TOKEN) {
+        options.headers['Authorization'] = 'Token ' + window.API_TOKEN;
+      }
+      const response = await fetch(url, options);
+      return response;
+    };
+  </script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>
